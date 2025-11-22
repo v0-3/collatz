@@ -1,15 +1,29 @@
-CC	= g++ -Wall -pedantic -std=c++11 -pthread -O3
+# Compiler and flags
+CXX       := clang++
+CXXFLAGS  := -std=c++23 -O3 -march=native -Wall -Wextra -Wpedantic
 
-all: collatz
+# Target
+TARGET    := collatz
+SRC       := collatz.cpp
+OBJ       := $(SRC:.cpp=.o)
 
-collatz.o: collatz.cpp
-	$(CC) -c collatz.cpp
+# Default rule
+all: $(TARGET)
 
-collatz: collatz.o
-	$(CC) -o collatz collatz.o
+# Link
+$(TARGET): $(OBJ)
+	$(CXX) $(CXXFLAGS) $(OBJ) -o $(TARGET)
 
-# -----
-# clean by removing object files.
+# Compile
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# Run target
+run: $(TARGET)
+	./$(TARGET)
+
+# Clean build artifacts
 clean:
-	rm collatz.o collatz
+	rm -f $(TARGET) $(OBJ)
+
+.PHONY: all clean run
