@@ -1,62 +1,73 @@
 #include <atomic>
 #include <chrono>
-#include <iostream>
+#include <cstdint>
+#include <cstdlib>
+#include <print>
 #include <thread>
+#include <vector>
 
-const uint64_t LIMIT = 2147483647;
-const uint64_t THREAD_COUNT = std::thread::hardware_concurrency();
+using counter_t = std::uint64_t;
 
-std::atomic<uint64_t> total;
-std::atomic<uint64_t> counter;
+constexpr counter_t LIMIT = 2'147'483'647; // 2^31 - 1
 
-void collatz() {
-    uint64_t n;
+void collatz(counter_t limit,
+             std::atomic<counter_t>& counter,
+             std::atomic<counter_t>& total) noexcept
+{
+    for (auto n = counter.fetch_add(1, std::memory_order_relaxed);
+         n <= limit;
+         n = counter.fetch_add(1, std::memory_order_relaxed))
+    {
+        auto value = n;
 
-    while ((n = counter++) <= LIMIT) {
-        while (n != 1) {
-            while (n & 1) {
-                n = (3 * n + 1) / 2;
+        while (value != 1) {
+            while ((value & 1U) != 0U) {
+                value = (3 * value + 1) / 2;
             }
-            while (!(n & 1)) {
-                n /= 2;
+            while ((value & 1U) == 0U) {
+                value /= 2;
             }
         }
-        total++;
+
+        total.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
-int main(int argc, char *argv[]) {
-    total = 0;
-    counter = 1;
-
+int main(int argc, char* argv[])
+{
     if (argc != 1) {
-        std::cout << "Usage: ./collatz" << std::endl;
-        exit(EXIT_FAILURE);
+        std::println(stderr, "Usage: {}",
+                     (argc > 0 && argv[0] != nullptr) ? argv[0] : "./collatz");
+        return EXIT_FAILURE;
     }
 
-    std::cout << "Running, this may take some time..." << std::endl;
+    std::atomic<counter_t> total{0};
+    std::atomic<counter_t> counter{1};
 
-    std::thread *t = new std::thread[THREAD_COUNT];
+    const auto hw_threads = std::thread::hardware_concurrency();
+    const std::size_t thread_count = hw_threads == 0U ? 1U : static_cast<std::size_t>(hw_threads);
 
-    auto t1 = std::chrono::high_resolution_clock::now();
+    std::println("Running with {} thread(s); this may take some time...", thread_count);
 
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        t[i] = std::thread(collatz);
+    std::vector<std::jthread> threads;
+    threads.reserve(thread_count);
+
+    const auto start = std::chrono::steady_clock::now();
+
+    for (std::size_t i = 0; i < thread_count; ++i) {
+        threads.emplace_back(collatz, LIMIT, std::ref(counter), std::ref(total));
     }
+    // std::jthread joins on destruction
 
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        t[i].join();
-    }
+    const auto end = std::chrono::steady_clock::now();
+    const auto elapsed_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    auto t2 = std::chrono::high_resolution_clock::now();
+    std::println("Program statistics:");
+    std::println("\tThread count   : {}", thread_count);
+    std::println("\tLimit value    : {}", LIMIT);
+    std::println("\tCollatz numbers: {}", total.load(std::memory_order_relaxed));
+    std::println("\tRun-time       : {} ms", elapsed_ms);
 
-    std::cout << "Program Statistics: " << std::endl;
-    std::cout << "\tThread Count: " << THREAD_COUNT << std::endl;
-    std::cout << "\tLimit Value: " << LIMIT << std::endl;
-    std::cout << "\tCollatz Numbers: " << total << std::endl;
-
-    std::cout << "\tRun-time: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() << " ms" << std::endl;
-
-    delete []t;
-    return 0;
+    return EXIT_SUCCESS;
 }
