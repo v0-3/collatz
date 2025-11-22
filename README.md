@@ -66,3 +66,10 @@ Program Statistics:
 - Atomic fetch-add is used to minimize synchronization.
 - `-O3 -march=native` significantly improves performance.
 - For large LIMIT values, expect full CPU utilization.
+
+---
+
+## License
+
+© [Luis Maya Aranda](https://github.com/v0-3). All rights reserved.  
+Licensed under the **MIT License**.
